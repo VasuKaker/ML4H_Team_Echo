@@ -17,14 +17,14 @@ print(len(val_vid_names))
 print(len(test_vid_names))
 
 def transfer_file(names, phase='train'):
+    if phase not in os.listdir('datasets'):
+        os.mkdir(f"datasets/{phase}")
     for i, vid in enumerate(names):
         if i % 50 == 0:
             print("i is: ", i)
         vid_file = vid + '.avi'
         destination_folder = f"datasets/{phase}"
-
         shutil.copy(f"Videos/{vid_file}", destination_folder)
-
     print("done")
 
 transfer_file(train_vid_names, phase='train')
