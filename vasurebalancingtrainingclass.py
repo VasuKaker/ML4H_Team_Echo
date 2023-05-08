@@ -12,11 +12,7 @@ data_dir = "datasets"
 import pandas as pd
 import torch
 import os
-import cv2
-import numpy as np
-import shutil
-from torch.utils.data import Dataset, DataLoader
-import random
+from shared_functions_datasets import batch_data
 
 ### assume we have filelistcsv loaded
 FileListCSV = pd.read_csv("FileList.csv")
@@ -24,45 +20,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 train_video_tensors = []
 train_video_labels = []
-
-def avi_to_tensor(video_file, max_frames=None):
-    # Initialize a list to store video frames
-    frames = []
-
-    # Open the video file
-    cap = cv2.VideoCapture(video_file)
-
-    # Read frames from the video file
-    while cap.isOpened():
-        ret, frame = cap.read()
-
-        if not ret:
-            break
-
-        # Convert frame from BGR to RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # Transpose the frame shape from (height, width, channel) to (channel, height, width)
-        frame_t = np.transpose(frame_rgb, (2, 0, 1))
-
-        frames.append(frame_t)
-
-        # Stop reading frames if maximum number of frames is reached
-        if max_frames is not None and len(frames) >= max_frames:
-            break
-
-    # Release the video file
-    cap.release()
-
-    # Stack the frames to create a 4D numpy array
-    video_array = np.stack(frames, axis=0)
-
-    # Convert the numpy array to a PyTorch tensor
-    video_tensor = torch.from_numpy(video_array).float()
-
-    return video_tensor
-
-FileListCSV
 
 training = FileListCSV[FileListCSV['Split'] == 'TRAIN']
 training_positive_examples = training[training['EFBelow40'] == 1]
@@ -76,90 +33,6 @@ training_rebalanced = pd.concat([training_positive_examples, training_negative_e
 training_rebalanced = training_rebalanced.sample(frac=1.0, random_state=42)
 
 training_rebalanced_files = training_rebalanced[training_rebalanced['Split'] == 'TRAIN']['FileName'].tolist()
-
-class VideoDataset(Dataset):
-    def __init__(self, video_tensors, labels=None):
-        self.video_tensors = video_tensors
-        self.labels = labels
-
-    def __len__(self):
-        return len(self.video_tensors)
-
-    def __getitem__(self, index):
-        video_data = self.video_tensors[index]
-        
-        if self.transform:
-            video_data = self.transform(video_data)
-        
-        if self.labels is not None:
-            label = self.labels[index]
-            return video_data, label
-
-
-def batch_data(data_dir, batch_size, video_names, videos_used_so_far, phase = 'train'):
-  location_of_videos = f"{data_dir}/{phase}"
-  destinated_batched_tensor_folder = f"{data_dir}/{phase}_batched_downsampled"
-  random.shuffle(video_names)
-
-  num_videos = len(video_names)
-  num_batches = num_videos // batch_size
-  batches = []
-
-  video_names = [video for video in video_names if video not in videos_used_so_far]
-
-  print("we are creating batches")
-  for i in range(num_batches):
-      start = i * batch_size
-      end = min((i + 1) * batch_size, num_videos)
-      batches.append(video_names[start:end])
-  
-  if num_videos % batch_size != 0:
-    remainder_batch = video_names[num_batches * batch_size:]
-    batches.append(remainder_batch)
-  
-  print("done creating batches")
-
-  print(os.listdir())
-
-  print(os.listdir("datasets"))
-  print(os.listdir("datasets/train_batched_downsampled"))
-  print("os.listdir(destinated_batched_tensor_folder) is: ", os.listdir(destinated_batched_tensor_folder))
-  print([elem for elem in os.listdir(destinated_batched_tensor_folder)])
-  print([elem for elem in os.listdir(destinated_batched_tensor_folder)])
-  all_i_vals = [int(elem.split('_')[-1][:-3]) for elem in os.listdir(destinated_batched_tensor_folder) if elem != '.DS_Store']
-  if all_i_vals == []:
-    max_i = None
-
-  for i, batch in enumerate(batches):
-    if i == 2:
-      break
-    if max_i == None:
-      i_to_use = i
-    else:
-      i_to_use = i + max_i + 1
-
-    if i % 10 == 0:
-      print(f"we are on the {i_to_use}th batch")
-    batch_name = f'{phase}_batch_{i_to_use}.pt'
-    if batch_name in os.listdir(destinated_batched_tensor_folder):
-      print("batch_name already in the folder")
-      continue
-    batch_X_list = []
-    batch_y_list = []
-    video_ids = []
-
-    for video in batch:
-      videos_used_so_far.append(video)
-      tensor = avi_to_tensor(location_of_videos + '/' + video + '.avi')
-      tensor = tensor[::4]
-      batch_X_list.append(tensor)
-      batch_y_list.append(FileListCSV[FileListCSV['FileName'] == video]['EFBelow40'].item())
-      video_ids.append(video)
-    
-    mini_dataset = VideoDataset(batch_X_list, batch_y_list, video_ids)
-    torch.save(mini_dataset, destinated_batched_tensor_folder + '/' + batch_name)
-
-  return batches
 
 batch_size = 20
 
@@ -178,4 +51,4 @@ if not os.path.exists(folder_destination):
 ### CALLING FUNCTION
 train_videos_used_so_far = []
 print("len(training_rebalanced_files) is: ", len(training_rebalanced_files))
-variable = batch_data(data_dir, 20, training_rebalanced_files, [], phase = 'train')
+batch_data(data_dir, 20, training_rebalanced_files, [], phase = 'train', rebalancing=True)

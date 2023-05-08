@@ -7,182 +7,23 @@ Original file is located at
     https://colab.research.google.com/drive/12uVchANt3eJ1Nv1NYIzQ77jy_bAh35iD
 """
 
+### Modified May 8th, 2:10PM
+
 use_gdrive = True
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
 from torchvision.models.video import r3d_18, R3D_18_Weights
 print("we made it here")
 # from torchvision.models.video import swin3d_t, Swin3D_T_Weights
 print('we did not make it here')
 from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
 import os
-import math
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import models, transforms
-import time
 import random
-import matplotlib.pyplot as plt
-
-class r3dmodel(nn.Module):
-  def __init__(self, model1):
-    super(r3dmodel, self).__init__()
-    self.preloaded_model = model1
-    self.new_layer1 = nn.Linear(400,1)
-    self.new_layer2 = nn.Sigmoid()
-    
-  def forward(self, x):
-    x = self.preloaded_model(x)
-    x = self.new_layer1(x)
-    x = self.new_layer2(x)
-    return x
-
-class swin3dmodel(nn.Module):
-  def __init__(self, model2):
-    super(swin3dmodel, self).__init__()
-    self.preloaded_model = model2
-    self.new_layer1 = nn.Linear(400,1)
-    self.new_layer2 = nn.Sigmoid()
-  def forward(self, x):
-    x = self.preloaded_model(x)
-
-    x = self.new_layer1(x)
-    x = self.new_layer2(x)
-
-    return x
-
-class CustomBinaryCrossEntropyLoss(nn.Module):
-    def __init__(self):
-        super(CustomBinaryCrossEntropyLoss, self).__init__()
-
-    def forward(self, logits, targets):
-        # Convert logits to probabilities using sigmoid function
-        probabilities = logits
-        
-        # Calculate  binary cross-entropy loss
-        loss = -(targets * torch.log(probabilities) + (1 - targets) * torch.log(1 - probabilities))
-        # print("loss is: ", loss)
-        return loss
-
-def calculate_metrics(outputs, labels):
-  ### Update correct scores
-  running_corrects = 0
-  running_total = 0
-  TP, TN, FP, FN = 0, 0, 0, 0
-
-  for i, prob in enumerate(outputs):
-    ### Determining Prediction
-    if prob > 0.5:
-      pred = 1
-    else:
-      pred = 0
-    
-    ### Label
-    label = labels[i]
-    if pred == label:
-      running_corrects += 1
-    running_total += 1
-
-    ### TP, TN, FP, FN calculation
-    if pred == 1 and label == 1:
-      TP += 1
-    elif pred == 0 and label == 0:
-      TN += 1
-    elif pred == 1 and label == 0:
-      FP += 1
-    elif pred == 0 and label == 1:
-      FN += 1
-  
-  return running_corrects, running_total, TP, TN, FP, FN
-
-def epoch_evaluation(model, data_dir, training=True):
-    running_loss = 0
-    running_corrects = 0
-    running_total = 0
-    running_probabilities = []
-    running_labels = []
-    running_video_ids = []
-
-    loss = None
-
-    running_losses = []
-    num_additions = 0
-
-    for j, file in enumerate(os.listdir(data_dir)):
-      # print("File #: ", j)
-      dataset = torch.load(f'{data_dir}/{file}')
-      dataloader = DataLoader(dataset, batch_size=batch_size_fake, shuffle=training)
-      optimizer.zero_grad()
-
-      for i, (inputs, labels, video_id) in enumerate(dataloader):
-        # print("i is: ", i)
-        inputs = inputs.permute(0, 2, 1, 3, 4)
-        # print("inputs.shape is: ", inputs.shape)
-
-        inputs = inputs.to(device)
-        labels = labels.to(device)
-
-        if training == True:
-            with torch.set_grad_enabled(True):
-              if (i+1) % batch_size_effective == 0:
-                # print("Updating parameters")
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-                loss = None
-
-        if training == False:
-          with torch.no_grad():
-            outputs = model(inputs)
-            if outputs.item() == np.nan:
-              print("issue happening")
-              print("data_dir is: ", data_dir)
-              print("file is: ", file)
-              print("i is: ", i)
-            # print("outputs.shape is: ", outputs.shape)
-            outputs = outputs.squeeze(0)
-
-            if loss == None:
-              loss = loss_fn(outputs, labels)
-              running_losses.append(loss.item())
-              num_additions += 1
-              running_loss += loss.item()
-            else:
-              loss_temp = loss_fn(outputs, labels)
-              running_losses.append(loss_temp.item())
-              num_additions += 1
-              running_loss += loss_temp.item()
-              loss += loss_temp
-            
-        elif training == True:
-          outputs = model(inputs)
-          # print("outputs.shape is: ", outputs.shape)          
-          outputs = outputs.squeeze(0)
-
-          if loss == None:
-            loss = loss_fn(outputs, labels)
-            running_losses.append(loss.item())
-            num_additions += 1
-            running_loss += loss.item()
-          else:
-            loss_temp = loss_fn(outputs, labels)
-            running_losses.append(loss_temp.item())
-            num_additions += 1
-            running_loss += loss_temp.item()
-            loss += loss_temp
-          
-        running_labels.append(labels.item())
-        running_probabilities.append(outputs.item())
-        running_video_ids.append(video_id)
-    # print("running_probabilities is: ", running_probabilities)
-    # print("running_labels is: ", running_labels)
-    running_corrects, running_total, TP, TN, FP, FN = calculate_metrics(running_probabilities, running_labels)
-    # calculated_loss = sum([-1*(running_labels[i]*math.log(running_probabilities[i]) + (1-running_labels[i])*math.log(1-running_probabilities[i])) for i in range(len(running_labels))])/len(running_labels)
-    return running_loss / len(running_probabilities), running_corrects, running_total, running_probabilities, running_labels, running_video_ids, TP, TN, FP, FN
+import json
+from mainpipeline_helpers import *
 
 
 data_dir = "datasets"
@@ -250,7 +91,7 @@ val_running_probabilities = None
 
 
 ### CHANGE EVERY TIME YOU RUN!!!!!!!
-experiment_name = 'ID1_May7_2023'
+experiment_name = 'ID1_May8_2023'
 
 best_model_path = data_dir + '/train_batched_normal_models'
 
@@ -259,9 +100,9 @@ best_val_auc = 0
 for epoch in range(num_epochs):
   print(f"EPOCH {epoch + 1}")
   print("TRAINING")
-  train_epoch_loss, train_epoch_corrects, train_epoch_total, train_epoch_probabilities, train_running_labels, train_running_video_ids, train_TP, train_TN, train_FP, train_FN = epoch_evaluation(model, train_data_dir, training=True)  
+  train_epoch_loss, train_epoch_corrects, train_epoch_total, train_epoch_probabilities, train_running_labels, train_running_video_ids, train_running_EF, train_TP, train_TN, train_FP, train_FN = epoch_evaluation(model, train_data_dir, loss_fn, optimizer, batch_size_fake, batch_size_effective, device, training=True)  
   print("VALIDATION")
-  val_epoch_loss, val_epoch_corrects, val_epoch_total, val_epoch_probabilities, val_running_labels, val_running_video_ids, val_TP, val_TN, val_FP, val_FN = epoch_evaluation(model, val_data_dir, training=False)
+  val_epoch_loss, val_epoch_corrects, val_epoch_total, val_epoch_probabilities, val_running_labels, val_running_video_ids, val_running_EF,  val_TP, val_TN, val_FP, val_FN = epoch_evaluation(model, val_data_dir, loss_fn, optimizer, batch_size_fake, batch_size_effective, device, training=False)
 
   train_auc = roc_auc_score(train_running_labels, train_epoch_probabilities)
   val_auc = roc_auc_score(val_running_labels, val_epoch_probabilities)
@@ -310,7 +151,8 @@ best_model = r3dmodel(model1_test)
 best_model_parameters = torch.load(f'{best_model_path}/{experiment_name}.pt')
 best_model.load_state_dict(best_model_parameters)
 best_model.to(device)
-test_epoch_loss, test_epoch_corrects, test_epoch_total, test_epoch_probabilities, test_running_labels, test_TP, test_TN, test_FP, test_FN, test_running_video_ids = epoch_evaluation(best_model, test_data_dir, training=False)
+test_epoch_loss, test_epoch_corrects, test_epoch_total, test_epoch_probabilities, test_running_labels, test_running_video_ids, test_running_EF, test_TP, test_TN, test_FP, test_FN = epoch_evaluation(best_model, test_data_dir, loss_fn, optimizer, batch_size_fake, batch_size_effective, device, training=False)
+print(test_running_EF)
 test_auc = roc_auc_score(test_running_labels, test_epoch_probabilities)
 test_accuracy = (test_TP + test_TN) / (test_TP + test_TN + test_FP + test_FN)
 test_accuracy_check = test_epoch_corrects / test_epoch_total
@@ -325,72 +167,11 @@ print("[TP, TN, FP, FN] is: ", str([test_TP, test_TN, test_FP, test_FN]))
 print("test_epoch_loss is: ", test_epoch_loss)
 print(f"Total # of samples is {test_epoch_total}")
 
-def optimize_threshold(probs, labels):
-    best_threshold = 0
-    best_accuracy = 0
 
-    thresholds = []
-    accuracies = []
+fig1, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(10, 4))
+fig2, ax2 = plt.subplots(nrows=1, ncols=1, figsize=(10, 4))
+fig3, ax3 = plt.subplots(nrows=1, ncols=1, figsize=(10, 4))
 
-
-    for threshold in np.arange(0, 1.001, 0.001):
-        predictions = (probs > threshold).astype(int)
-        accuracy = accuracy_score(labels, predictions)
-        thresholds.append(threshold)
-        accuracies.append(accuracy)
-        if accuracy > best_accuracy:
-            best_threshold = threshold
-            best_accuracy = accuracy
-    
-    return best_threshold, thresholds, accuracies
-
-def accuracy_score_threshold(threshold, probs, labels):
-    threshold = np.float64(threshold)
-    predictions = (probs > threshold).astype(int)
-    accuracy = accuracy_score(labels, predictions)
-    return accuracy
-
-
-def metrics(probabilities, labels, accuracy_v_threshold_plot, roc_auc_plot, phase, threshold_to_use=None):
-    print(phase)
-
-    best_threshold, thresholds, accuracies = optimize_threshold(probabilities, labels)      
-    roc_auc = roc_auc_score(labels, probabilities)
-
-    if threshold_to_use == None:
-        accuracy = accuracy_score_threshold(best_threshold, probabilities, labels)
-        print(f"best_threshold (used) is {best_threshold}")
-    else:
-        print(f"best_threshold (not used) is {best_threshold}")
-        print(f"theoretical accuracy (with best_threshold) is: {accuracy_score_threshold(best_threshold, probabilities, labels)}")
-        print(f"threshold used is {threshold_to_use}")
-        accuracy = accuracy_score_threshold(threshold_to_use, probabilities, labels)
-    
-    ax1 = accuracy_v_threshold_plot
-    ax2 = roc_auc_plot
-
-    ax1.plot(thresholds, accuracies, label=f'{phase} Curve')
-    ax1.set_title("Accuracy vs Threshold Plot")
-    ax1.set_xlabel("Threshold")
-    ax1.set_ylabel("Accuracy")
-    ax1.legend(loc="lower right")
-
-    fpr, tpr, _ = roc_curve(labels, probabilities)
-    ax2.plot(fpr, tpr, label=f'{phase} Curve (Area=%0.2f)' % roc_auc)
-    ax2.plot([0, 1], [0, 1], 'k--')  # dashed diagonal line
-    ax2.set_xlabel('False Positive Rate')
-    ax2.set_ylabel('True Positive Rate')
-    ax2.set_title('ROC Curve')
-    ax2.legend(loc="lower right")
-
-    print("minority class prevalence is: ", sum([1 for elem in labels if elem == 1])/len(labels))
-    print("majority class prevalence is: ", sum([1 for elem in labels if elem == 0])/len(labels))
-    print("AUC is: ", roc_auc)
-    print("Accuracy is: ", accuracy)
-
-    return best_threshold
-
-fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(10, 4))
 
 metrics(train_running_probabilities, train_running_labels, ax1, ax2, "Training")
 print()
@@ -406,13 +187,16 @@ ax3.plot(epochs, train_loss, label='Train loss')
 ax3.plot(epochs, val_loss, label='Validation loss')
 
 # Add x and y axis labels and a legend
-ax3.xlabel('Epochs')
-ax3.ylabel('Loss')
+ax3.set_xlabel('Epochs')
+ax3.set_ylabel('Loss')
 ax3.legend()
 
-ax1.axhline(y=0.875, color='red', linestyle='--', label = "Majority Class")
-ax1.legend(loc="lower right")
-plt.savefig(f'final_results_{experiment_name}.png')
+if experiment_name not in os.listdir():
+  os.mkdir(experiment_name)
+
+fig1.savefig(f'{experiment_name}/final_results_{experiment_name}_ax1')
+fig2.savefig(f'{experiment_name}/final_results_{experiment_name}_ax2')
+fig3.savefig(f'{experiment_name}/final_results_{experiment_name}_ax3')
 
 numerical_results = {
   "test_running_probabilities": test_running_probabilities,
@@ -420,3 +204,5 @@ numerical_results = {
   "test_running_video_ids": test_running_video_ids
 }
 
+with open(f'{experiment_name}/numerical_results_{experiment_name}.json', 'w') as file:
+  json.dump(numerical_results, file, indent=1)
